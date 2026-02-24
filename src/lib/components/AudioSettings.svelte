@@ -316,4 +316,26 @@
       Helps Whisper produce more accurate transcriptions for your spoken language.
     </p>
   </div>
+
+  {#if import.meta.env.DEV}
+    <hr class="border-surface-lighter" />
+
+    <div>
+      <h3 class="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">
+        Debug
+      </h3>
+      <label class="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          bind:checked={settings.saveDebugAudio}
+          onchange={onSave}
+          class="w-4 h-4 rounded border-surface-lighter text-primary focus:ring-primary/30"
+        />
+        <div>
+          <span class="text-sm text-text">Save audio recordings</span>
+          <p class="text-xs text-text-muted">Saves each recording as <code>whispery_debug.wav</code> on your Desktop. The exact bytes sent to Whisper.</p>
+        </div>
+      </label>
+    </div>
+  {/if}
 </div>

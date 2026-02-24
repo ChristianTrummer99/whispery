@@ -23,6 +23,12 @@ fn list_audio_devices(state: tauri::State<AppState>) -> Vec<String> {
     recorder.list_devices()
 }
 
+#[tauri::command]
+fn get_audio_level(state: tauri::State<AppState>) -> f32 {
+    let recorder = state.recorder.lock().unwrap();
+    recorder.get_audio_level()
+}
+
 fn show_overlay(app: &tauri::AppHandle) {
     #[cfg(target_os = "macos")]
     {
@@ -58,24 +64,43 @@ fn hide_overlay(app: &tauri::AppHandle) {
     }
 }
 
-
 #[tauri::command]
 fn start_recording(
     state: tauri::State<AppState>,
     app: tauri::AppHandle,
     device_name: Option<String>,
 ) -> Result<(), String> {
+    eprintln!("[whispery] Recording started (device={:?})", device_name);
     let mut recorder = state.recorder.lock().unwrap();
     recorder.start(device_name.as_deref())?;
 
-    let _ = app.emit("recording-status", RecordingStatus {
-        state: "listening".into(),
-        message: None,
-    });
+    let _ = app.emit(
+        "recording-status",
+        RecordingStatus {
+            state: "listening".into(),
+            message: None,
+        },
+    );
 
     show_overlay(&app);
-
     Ok(())
+}
+
+#[tauri::command]
+fn cancel_recording(state: tauri::State<AppState>, app: tauri::AppHandle) {
+    eprintln!("[whispery] Recording cancelled by user");
+    let mut recorder = state.recorder.lock().unwrap();
+    recorder.cancel();
+
+    let _ = app.emit(
+        "recording-status",
+        RecordingStatus {
+            state: "idle".into(),
+            message: None,
+        },
+    );
+
+    hide_overlay(&app);
 }
 
 #[tauri::command]
@@ -84,74 +109,49 @@ fn hide_overlay_cmd(app: tauri::AppHandle) {
 }
 
 #[tauri::command]
-fn test_clipboard_only(text: String) -> Result<String, String> {
-    eprintln!("whispery test: clipboard_only called with: {text}");
+fn paste_to_input(text: String) -> Result<String, String> {
+    eprintln!("[whispery] Pasting to input: \"{}\"", text);
     use arboard::Clipboard;
-    let mut clipboard = Clipboard::new().map_err(|e| format!("Clipboard::new failed: {e}"))?;
-    clipboard.set_text(&text).map_err(|e| format!("set_text failed: {e}"))?;
-    eprintln!("whispery test: clipboard set OK");
-    Ok("clipboard OK".into())
-}
+    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 
-#[tauri::command]
-fn test_enigo_only() -> Result<String, String> {
-    eprintln!("whispery test: enigo_only called");
-    use enigo::{Enigo, Key, Keyboard, Settings, Direction};
-
-    let mut enigo = Enigo::new(&Settings::default())
-        .map_err(|e| format!("Enigo::new failed: {e}"))?;
-    eprintln!("whispery test: enigo created OK");
-
-    #[cfg(target_os = "macos")]
-    {
-        enigo.key(Key::Meta, Direction::Press).map_err(|e| format!("Meta press: {e}"))?;
-        enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| format!("v click: {e}"))?;
-        enigo.key(Key::Meta, Direction::Release).map_err(|e| format!("Meta release: {e}"))?;
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        enigo.key(Key::Control, Direction::Press).map_err(|e| format!("Ctrl press: {e}"))?;
-        enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| format!("v click: {e}"))?;
-        enigo.key(Key::Control, Direction::Release).map_err(|e| format!("Ctrl release: {e}"))?;
-    }
-
-    eprintln!("whispery test: enigo paste simulated OK");
-    Ok("enigo OK".into())
-}
-
-#[tauri::command]
-fn test_paste_combined(text: String) -> Result<String, String> {
-    eprintln!("whispery test: paste_combined called");
-    use arboard::Clipboard;
-    use enigo::{Enigo, Key, Keyboard, Settings, Direction};
-
-    let mut clipboard = Clipboard::new().map_err(|e| format!("Clipboard::new failed: {e}"))?;
-    clipboard.set_text(&text).map_err(|e| format!("set_text failed: {e}"))?;
-    eprintln!("whispery test: clipboard set");
+    let mut clipboard =
+        Clipboard::new().map_err(|e| format!("Clipboard::new failed: {e}"))?;
+    clipboard
+        .set_text(&text)
+        .map_err(|e| format!("set_text failed: {e}"))?;
 
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    let mut enigo = Enigo::new(&Settings::default())
-        .map_err(|e| format!("Enigo::new failed: {e}"))?;
-    eprintln!("whispery test: enigo created");
+    let mut enigo =
+        Enigo::new(&Settings::default()).map_err(|e| format!("Enigo::new failed: {e}"))?;
 
     #[cfg(target_os = "macos")]
     {
-        enigo.key(Key::Meta, Direction::Press).map_err(|e| format!("Meta press: {e}"))?;
-        enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| format!("v click: {e}"))?;
-        enigo.key(Key::Meta, Direction::Release).map_err(|e| format!("Meta release: {e}"))?;
+        enigo
+            .key(Key::Meta, Direction::Press)
+            .map_err(|e| format!("Meta press: {e}"))?;
+        enigo
+            .key(Key::Unicode('v'), Direction::Click)
+            .map_err(|e| format!("v click: {e}"))?;
+        enigo
+            .key(Key::Meta, Direction::Release)
+            .map_err(|e| format!("Meta release: {e}"))?;
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        enigo.key(Key::Control, Direction::Press).map_err(|e| format!("Ctrl press: {e}"))?;
-        enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| format!("v click: {e}"))?;
-        enigo.key(Key::Control, Direction::Release).map_err(|e| format!("Ctrl release: {e}"))?;
+        enigo
+            .key(Key::Control, Direction::Press)
+            .map_err(|e| format!("Ctrl press: {e}"))?;
+        enigo
+            .key(Key::Unicode('v'), Direction::Click)
+            .map_err(|e| format!("v click: {e}"))?;
+        enigo
+            .key(Key::Control, Direction::Release)
+            .map_err(|e| format!("Ctrl release: {e}"))?;
     }
 
-    eprintln!("whispery test: paste simulated OK");
-    Ok("paste OK".into())
+    Ok("ok".into())
 }
 
 #[tauri::command]
@@ -165,57 +165,101 @@ async fn stop_recording_and_process(
     prompt_template: String,
     skip_transform: bool,
     whisper_language: Option<String>,
+    glossary_prompt: Option<String>,
+    save_debug_audio: Option<bool>,
 ) -> Result<String, String> {
     let wav_data = {
         let mut recorder = state.recorder.lock().unwrap();
         let samples = recorder.stop();
+        let sample_count = samples.len();
+        let capture_rate = recorder.capture_rate();
+        eprintln!("[whispery] Recording stopped — {sample_count} samples, capture_rate={capture_rate}Hz, duration={:.2}s", sample_count as f64 / capture_rate as f64);
         if samples.is_empty() {
-            let _ = app.emit("recording-status", RecordingStatus {
-                state: "error".into(),
-                message: Some("No audio recorded".into()),
-            });
+            eprintln!("[whispery] ERROR: No audio samples");
+            let _ = app.emit(
+                "recording-status",
+                RecordingStatus {
+                    state: "error".into(),
+                    message: Some("No audio recorded".into()),
+                },
+            );
             return Err("No audio captured".into());
         }
-        recorder.encode_wav(&samples)
+        let wav = recorder.encode_wav(&samples);
+        eprintln!("[whispery] WAV encoded — {} bytes", wav.len());
+
+        if save_debug_audio.unwrap_or(false) {
+            if let Some(mut path) = dirs::desktop_dir() {
+                path.push("whispery_debug.wav");
+                match std::fs::write(&path, &wav) {
+                    Ok(_) => eprintln!("[whispery] Debug audio saved to {}", path.display()),
+                    Err(e) => eprintln!("[whispery] Failed to save debug audio: {e}"),
+                }
+            }
+        }
+
+        wav
     };
 
-    let _ = app.emit("recording-status", RecordingStatus {
-        state: "processing".into(),
-        message: Some("Transcribing...".into()),
-    });
+    let _ = app.emit(
+        "recording-status",
+        RecordingStatus {
+            state: "processing".into(),
+            message: Some("Transcribing...".into()),
+        },
+    );
 
     let lang = whisper_language.as_deref().unwrap_or("en");
-    let transcribed = transcribe::transcribe_whisper(&openai_api_key, wav_data, lang).await?;
+    let glossary = glossary_prompt.as_deref();
+    eprintln!("[whispery] Transcription started (lang={lang}, glossary={})", glossary.unwrap_or("none"));
+    let transcribed =
+        transcribe::transcribe_whisper(&openai_api_key, wav_data, lang, glossary).await?;
+    eprintln!("[whispery] Transcription result: \"{}\"", transcribed);
 
     if transcribed.is_empty() {
-        let _ = app.emit("recording-status", RecordingStatus {
-            state: "error".into(),
-            message: Some("No speech detected".into()),
-        });
+        eprintln!("[whispery] ERROR: Empty transcription");
+        let _ = app.emit(
+            "recording-status",
+            RecordingStatus {
+                state: "error".into(),
+                message: Some("No speech detected".into()),
+            },
+        );
         return Err("Empty transcription".into());
     }
 
     let final_text = if skip_transform || prompt_template.is_empty() {
+        eprintln!("[whispery] No transformation — using raw transcription");
         transcribed
     } else {
-        let _ = app.emit("recording-status", RecordingStatus {
-            state: "processing".into(),
-            message: Some("Transforming...".into()),
-        });
-        transform::transform_text(
+        let _ = app.emit(
+            "recording-status",
+            RecordingStatus {
+                state: "processing".into(),
+                message: Some("Transforming...".into()),
+            },
+        );
+        eprintln!("[whispery] Transformation started (model={llm_model})");
+        let result = transform::transform_text(
             &llm_api_key,
             &llm_api_url,
             &llm_model,
             &prompt_template,
             &transcribed,
         )
-        .await?
+        .await?;
+        eprintln!("[whispery] Transformation result: \"{}\"", result);
+        result
     };
 
-    let _ = app.emit("recording-status", RecordingStatus {
-        state: "success".into(),
-        message: Some(final_text.clone()),
-    });
+    eprintln!("[whispery] Final output: \"{}\"", final_text);
+    let _ = app.emit(
+        "recording-status",
+        RecordingStatus {
+            state: "success".into(),
+            message: Some(final_text.clone()),
+        },
+    );
 
     Ok(final_text)
 }
@@ -240,13 +284,9 @@ mod macos_panel {
         if let Some(overlay_window) = app.get_webview_window("overlay") {
             match overlay_window.to_panel::<OverlayPanel>() {
                 Ok(panel) => {
-                    // NSPanel level: floating (8) is sufficient — the NSPanel
-                    // mechanism itself handles appearing over fullscreen apps.
                     panel.set_level(8);
 
-                    let style = StyleMask::empty()
-                        .nonactivating_panel()
-                        .resizable();
+                    let style = StyleMask::empty().nonactivating_panel().resizable();
                     panel.set_style_mask(style.value());
 
                     panel.set_collection_behavior(
@@ -286,18 +326,18 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             list_audio_devices,
+            get_audio_level,
             start_recording,
+            cancel_recording,
             stop_recording_and_process,
             hide_overlay_cmd,
-            test_clipboard_only,
-            test_enigo_only,
-            test_paste_combined,
+            paste_to_input,
         ])
         .setup(|app| {
             #[cfg(desktop)]
             {
-                use tauri::tray::TrayIconBuilder;
                 use tauri::menu::{MenuBuilder, MenuItemBuilder};
+                use tauri::tray::TrayIconBuilder;
 
                 #[cfg(target_os = "macos")]
                 {
@@ -322,19 +362,17 @@ pub fn run() {
                 let _tray = TrayIconBuilder::new()
                     .menu(&menu)
                     .tooltip("Whispery")
-                    .on_menu_event(|app, event| {
-                        match event.id().as_ref() {
-                            "show" => {
-                                if let Some(w) = app.get_webview_window("main") {
-                                    let _ = w.show();
-                                    let _ = w.set_focus();
-                                }
+                    .on_menu_event(|app, event| match event.id().as_ref() {
+                        "show" => {
+                            if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.show();
+                                let _ = w.set_focus();
                             }
-                            "quit" => {
-                                app.exit(0);
-                            }
-                            _ => {}
                         }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
                     })
                     .build(app)?;
             }

@@ -67,5 +67,3 @@ whispery/
 │       └── transform.rs          # LLM text transformation
 └── package.json
 ```
-
-

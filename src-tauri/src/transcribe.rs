@@ -4,6 +4,7 @@ pub async fn transcribe_whisper(
     api_key: &str,
     wav_data: Vec<u8>,
     language: &str,
+    glossary_prompt: Option<&str>,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
 
@@ -12,11 +13,17 @@ pub async fn transcribe_whisper(
         .mime_str("audio/wav")
         .map_err(|e| format!("Mime error: {e}"))?;
 
-    let form = multipart::Form::new()
+    let mut form = multipart::Form::new()
         .text("model", "whisper-1")
         .text("response_format", "text")
         .text("language", language.to_string())
         .part("file", file_part);
+
+    if let Some(prompt) = glossary_prompt {
+        if !prompt.is_empty() {
+            form = form.text("prompt", prompt.to_string());
+        }
+    }
 
     let resp = client
         .post("https://api.openai.com/v1/audio/transcriptions")

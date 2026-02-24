@@ -18,6 +18,8 @@ export interface Settings {
   selectedDevice: string;
   activePromptId: string;
   prompts: Prompt[];
+  glossary: string[];
+  saveDebugAudio: boolean;
 }
 
 export const WHISPER_LANGUAGES = [
@@ -130,6 +132,8 @@ export const DEFAULT_SETTINGS: Settings = {
   selectedDevice: "",
   activePromptId: "fix-grammar",
   prompts: [...DEFAULT_PROMPTS],
+  glossary: [],
+  saveDebugAudio: false,
 };
 
 let store: Store | null = null;

@@ -20,14 +20,16 @@
         "minHeight": 500,
         "center": true,
         "decorations": true,
-        "visible": true
+        "visible": true,
+        "titleBarStyle": "Transparent",
+        "backgroundColor": [255, 255, 255, 255]
       },
       {
         "label": "overlay",
         "title": "",
         "url": "/overlay",
-        "width": 120,
-        "height": 120,
+        "width": 220,
+        "height": 52,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,

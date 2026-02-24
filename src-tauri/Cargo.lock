@@ -5525,6 +5525,7 @@ dependencies = [
  "arboard",
  "base64 0.22.1",
  "cpal",
+ "dirs",
  "enigo",
  "hound",
  "reqwest 0.12.28",

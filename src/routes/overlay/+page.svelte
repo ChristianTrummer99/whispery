@@ -1,85 +1,174 @@
 <script lang="ts">
   import { listen } from "@tauri-apps/api/event";
   import { invoke } from "@tauri-apps/api/core";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window";
+  import { load } from "@tauri-apps/plugin-store";
   import { onMount } from "svelte";
 
   let status = $state<"idle" | "listening" | "processing" | "success" | "error">("idle");
-  let message = $state("");
+  let audioLevel = $state(0);
+  let barHeights = $state([0.15, 0.15, 0.15, 0.15, 0.15]);
+  let levelInterval: ReturnType<typeof setInterval> | null = null;
 
   onMount(() => {
-    const unlisten = listen<{ state: string; message?: string }>(
-      "recording-status",
-      (event) => {
-        status = event.payload.state as typeof status;
-        message = event.payload.message ?? "";
+    let unlisten: (() => void) | null = null;
 
-        if (status === "success" || status === "error") {
-          setTimeout(() => {
-            status = "idle";
-            invoke("hide_overlay_cmd");
-          }, 1500);
+    (async () => {
+      try {
+        const store = await load("settings.json");
+        const pos = await store.get<{ x: number; y: number }>("overlayPosition");
+        if (pos) {
+          const win = getCurrentWindow();
+          const monitors = await (await import("@tauri-apps/api/window")).availableMonitors();
+          const onScreen = monitors.some((m) => {
+            const mx = m.position.x;
+            const my = m.position.y;
+            const mw = m.size.width / m.scaleFactor;
+            const mh = m.size.height / m.scaleFactor;
+            return pos.x >= mx - 50 && pos.x < mx + mw && pos.y >= my - 50 && pos.y < my + mh;
+          });
+
+          if (onScreen) {
+            await win.setPosition(new LogicalPosition(pos.x, pos.y));
+          } else {
+            await store.delete("overlayPosition");
+            await store.save();
+          }
         }
-      }
-    );
+      } catch { /* position restore is best-effort */ }
+
+      const unlistenFn = await listen<{ state: string; message?: string }>(
+        "recording-status",
+        (event) => {
+          const newStatus = event.payload.state as typeof status;
+
+          if (newStatus === "listening" && status !== "listening") {
+            startPollingLevel();
+          } else if (newStatus !== "listening") {
+            stopPollingLevel();
+          }
+
+          status = newStatus;
+
+          if (status === "success" || status === "error") {
+            setTimeout(() => {
+              status = "idle";
+              invoke("hide_overlay_cmd");
+            }, 1500);
+          }
+        }
+      );
+      unlisten = unlistenFn;
+    })();
 
     return () => {
-      unlisten.then((fn) => fn());
+      unlisten?.();
+      stopPollingLevel();
     };
   });
 
-  function startDrag() {
-    getCurrentWindow().startDragging();
+  function startPollingLevel() {
+    if (levelInterval) return;
+    levelInterval = setInterval(async () => {
+      try {
+        const level = await invoke<number>("get_audio_level");
+        audioLevel = level;
+        updateBars(level);
+      } catch {
+        audioLevel = 0;
+      }
+    }, 60);
+  }
+
+  function stopPollingLevel() {
+    if (levelInterval) {
+      clearInterval(levelInterval);
+      levelInterval = null;
+    }
+    audioLevel = 0;
+    barHeights = [0.15, 0.15, 0.15, 0.15, 0.15];
+  }
+
+  function updateBars(level: number) {
+    const base = 0.15;
+    const jitter = () => (Math.random() - 0.5) * 0.15;
+    barHeights = [
+      Math.max(base, level * 0.7 + jitter()),
+      Math.max(base, level * 1.0 + jitter()),
+      Math.max(base, level * 0.85 + jitter()),
+      Math.max(base, level * 0.95 + jitter()),
+      Math.max(base, level * 0.75 + jitter()),
+    ];
+  }
+
+  async function startDrag(e: MouseEvent) {
+    const win = getCurrentWindow();
+    await win.startDragging();
+
+    setTimeout(async () => {
+      try {
+        const pos = await win.outerPosition();
+        const store = await load("settings.json");
+        await store.set("overlayPosition", { x: pos.x, y: pos.y });
+        await store.save();
+      } catch { /* position save is best-effort */ }
+    }, 200);
   }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-  class="overlay-root"
-  class:listening={status === "listening"}
-  class:processing={status === "processing"}
-  class:success={status === "success"}
-  class:error={status === "error"}
-  onmousedown={startDrag}
->
-  <div class="orb">
-    <div class="ring ring-1"></div>
-    <div class="ring ring-2"></div>
-    <div class="ring ring-3"></div>
-    <div class="core">
-      {#if status === "listening"}
-        <svg viewBox="0 0 24 24" fill="currentColor" class="icon">
-          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5z"/>
-          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-        </svg>
-      {:else if status === "processing"}
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon spin">
-          <path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/>
-        </svg>
-      {:else if status === "success"}
-        <svg viewBox="0 0 24 24" fill="currentColor" class="icon pop">
-          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-        </svg>
-      {:else if status === "error"}
-        <svg viewBox="0 0 24 24" fill="currentColor" class="icon shake">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-        </svg>
-      {/if}
-    </div>
+<div class="pill-root" onmousedown={startDrag}>
+  <div
+    class="pill"
+    class:listening={status === "listening"}
+    class:processing={status === "processing"}
+    class:success={status === "success"}
+    class:error={status === "error"}
+  >
+    {#if status === "listening"}
+      <svg class="mic-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+      </svg>
+      <div class="bars">
+        {#each barHeights as h, i}
+          <div
+            class="bar"
+            style="height: {Math.min(h, 1) * 100}%; transition-delay: {i * 15}ms"
+          ></div>
+        {/each}
+      </div>
+    {:else if status === "processing"}
+      <div class="wave-bars">
+        {#each Array(7) as _, i}
+          <div class="wave-bar" style="animation-delay: {i * 0.1}s"></div>
+        {/each}
+      </div>
+    {:else if status === "success"}
+      <svg class="status-icon success-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+      </svg>
+      <span class="status-label">Done</span>
+    {:else if status === "error"}
+      <svg class="status-icon error-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+      </svg>
+      <span class="status-label">Error</span>
+    {/if}
   </div>
 </div>
 
 <style>
-  :global(body) {
+  :global(html), :global(body) {
     margin: 0;
     padding: 0;
-    background: transparent;
+    background: transparent !important;
     overflow: hidden;
   }
 
-  .overlay-root {
-    width: 120px;
-    height: 120px;
+  .pill-root {
+    width: 220px;
+    height: 52px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -87,200 +176,134 @@
     user-select: none;
   }
 
-  .orb {
-    position: relative;
-    width: 80px;
-    height: 80px;
+  .pill {
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 10px;
+    width: 200px;
+    height: 40px;
+    border-radius: 9999px;
+    background: rgba(15, 15, 26, 0.92);
+    border: 1px solid rgba(100, 100, 140, 0.2);
+    backdrop-filter: blur(12px);
+    padding: 0 16px;
+    transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
   }
 
-  .ring {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    border: 2px solid transparent;
-    opacity: 0;
-    transition: opacity 0.3s, transform 0.3s;
+  .pill.listening {
+    border-color: rgba(34, 211, 238, 0.3);
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
   }
 
-  .listening .ring {
-    opacity: 1;
+  .pill.processing {
+    border-color: rgba(251, 191, 36, 0.3);
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.12);
   }
 
-  .listening .ring-1 {
-    border-color: #22d3ee;
-    animation: pulse 1.5s ease-in-out infinite;
-    box-shadow: 0 0 20px #22d3ee60;
+  .pill.success {
+    border-color: rgba(52, 211, 153, 0.4);
+    box-shadow: 0 0 20px rgba(52, 211, 153, 0.2);
+    animation: flash-success 0.4s ease-out;
   }
 
-  .listening .ring-2 {
-    border-color: #6366f180;
-    animation: pulse 1.5s ease-in-out infinite 0.3s;
-    inset: -8px;
+  .pill.error {
+    border-color: rgba(248, 113, 113, 0.4);
+    box-shadow: 0 0 20px rgba(248, 113, 113, 0.2);
+    animation: flash-error 0.5s ease-in-out;
   }
 
-  .listening .ring-3 {
-    border-color: #22d3ee40;
-    animation: pulse 1.5s ease-in-out infinite 0.6s;
-    inset: -16px;
-  }
-
-  .processing .ring-1 {
-    opacity: 1;
-    border-color: transparent;
-    border-top-color: #fbbf24;
-    border-right-color: #fbbf24;
-    animation: spin 0.8s linear infinite;
-    box-shadow: 0 0 15px #fbbf2440;
-  }
-
-  .processing .ring-2 {
-    opacity: 0.6;
-    border-color: transparent;
-    border-bottom-color: #fbbf2480;
-    border-left-color: #fbbf2480;
-    animation: spin 1.2s linear infinite reverse;
-    inset: -6px;
-  }
-
-  .success .ring-1 {
-    opacity: 1;
-    border-color: #34d399;
-    animation: success-ring 0.5s ease-out forwards;
-    box-shadow: 0 0 25px #34d39960;
-  }
-
-  .error .ring-1 {
-    opacity: 1;
-    border-color: #f87171;
-    box-shadow: 0 0 25px #f8717160;
-  }
-
-  .core {
-    position: relative;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: radial-gradient(circle, #1e1e2e 0%, #0f0f1a 100%);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-    z-index: 1;
-  }
-
-  .listening .core {
-    background: radial-gradient(circle, #1a2a3e 0%, #0f1a2a 100%);
-    box-shadow: 0 0 30px #22d3ee30;
-  }
-
-  .processing .core {
-    background: radial-gradient(circle, #2a2518 0%, #1a1808 100%);
-  }
-
-  .success .core {
-    background: radial-gradient(circle, #1a2e28 0%, #0f1a18 100%);
-  }
-
-  .error .core {
-    background: radial-gradient(circle, #2e1a1a 0%, #1a0f0f 100%);
-  }
-
-  .icon {
-    width: 24px;
-    height: 24px;
-    color: #e2e8f0;
-  }
-
-  .listening .icon {
+  .mic-icon {
+    width: 16px;
+    height: 16px;
     color: #22d3ee;
-    animation: breathe 1s ease-in-out infinite;
+    flex-shrink: 0;
   }
 
-  .processing .icon {
-    color: #fbbf24;
+  .bars {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 24px;
+    flex: 1;
   }
 
-  .success .icon {
+  .bar {
+    width: 4px;
+    min-height: 4px;
+    background: #22d3ee;
+    border-radius: 2px;
+    transition: height 0.08s ease-out;
+  }
+
+  .wave-bars {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+  }
+
+  .wave-bar {
+    width: 3px;
+    height: 6px;
+    background: #fbbf24;
+    border-radius: 2px;
+    animation: sine-wave 1s ease-in-out infinite;
+  }
+
+  .status-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  .success-icon {
     color: #34d399;
-  }
-
-  .error .icon {
-    color: #f87171;
-  }
-
-  .spin {
-    animation: spin 1s linear infinite;
-  }
-
-  .pop {
     animation: pop 0.4s ease-out;
   }
 
-  .shake {
+  .error-icon {
+    color: #f87171;
     animation: shake 0.5s ease-in-out;
   }
 
-  @keyframes pulse {
-    0%, 100% {
-      transform: scale(1);
-      opacity: 0.8;
-    }
-    50% {
-      transform: scale(1.15);
-      opacity: 0.4;
-    }
+  .status-label {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: #e2e8f0;
   }
 
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  @keyframes breathe {
+  @keyframes sine-wave {
     0%, 100% {
-      transform: scale(1);
+      height: 6px;
+      opacity: 0.6;
     }
     50% {
-      transform: scale(1.1);
+      height: 22px;
+      opacity: 1;
     }
   }
 
   @keyframes pop {
-    0% {
-      transform: scale(0);
-    }
-    60% {
-      transform: scale(1.2);
-    }
-    100% {
-      transform: scale(1);
-    }
+    0% { transform: scale(0); }
+    60% { transform: scale(1.3); }
+    100% { transform: scale(1); }
   }
 
   @keyframes shake {
-    0%, 100% {
-      transform: translateX(0);
-    }
-    25% {
-      transform: translateX(-4px);
-    }
-    75% {
-      transform: translateX(4px);
-    }
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    75% { transform: translateX(3px); }
   }
 
-  @keyframes success-ring {
-    0% {
-      transform: scale(0.8);
-      opacity: 0;
-    }
-    100% {
-      transform: scale(1);
-      opacity: 1;
-    }
+  @keyframes flash-success {
+    0% { background: rgba(52, 211, 153, 0.2); }
+    100% { background: rgba(15, 15, 26, 0.92); }
+  }
+
+  @keyframes flash-error {
+    0% { background: rgba(248, 113, 113, 0.15); }
+    100% { background: rgba(15, 15, 26, 0.92); }
   }
 </style>

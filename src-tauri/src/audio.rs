@@ -4,23 +4,23 @@ use std::sync::{Arc, Mutex};
 
 pub struct AudioRecorder {
     samples: Arc<Mutex<Vec<f32>>>,
+    current_level: Arc<Mutex<f32>>,
     stream: Option<cpal::Stream>,
-    sample_rate: u32,
+    capture_rate: u32,
 }
 
-// SAFETY: AudioRecorder is always accessed through a Mutex<AudioRecorder>
-// in AppState, ensuring exclusive access. The cpal::Host and cpal::Stream
-// types are only non-Send due to raw pointers in CoreAudio bindings, but
-// our usage pattern (create on main, access exclusively via mutex) is safe.
 unsafe impl Send for AudioRecorder {}
 unsafe impl Sync for AudioRecorder {}
+
+const TARGET_RATE: u32 = 16000;
 
 impl AudioRecorder {
     pub fn new() -> Self {
         Self {
             samples: Arc::new(Mutex::new(Vec::new())),
+            current_level: Arc::new(Mutex::new(0.0)),
             stream: None,
-            sample_rate: 16000,
+            capture_rate: TARGET_RATE,
         }
     }
 
@@ -31,7 +31,22 @@ impl AudioRecorder {
             .unwrap_or_default()
     }
 
+    pub fn capture_rate(&self) -> u32 {
+        self.capture_rate
+    }
+
+    pub fn get_audio_level(&self) -> f32 {
+        *self.current_level.lock().unwrap()
+    }
+
     pub fn start(&mut self, device_name: Option<&str>) -> Result<(), String> {
+        // Drop any existing stream — stops the old callback
+        self.stream = None;
+
+        // Create a FRESH buffer for this session so any lingering old
+        // callback writes to the previous (now-orphaned) Arc, not this one.
+        self.samples = Arc::new(Mutex::new(Vec::new()));
+
         let host = cpal::default_host();
         let device = match device_name {
             Some(name) => host
@@ -47,25 +62,28 @@ impl AudioRecorder {
             .map_err(|e| format!("Failed to query configs: {e}"))?;
 
         let config = supported
-            .filter(|c| c.channels() == 1 && c.sample_format() == SampleFormat::F32)
+            .filter(|c| c.sample_format() == SampleFormat::F32)
             .find(|c| {
-                c.min_sample_rate() <= SampleRate(16000)
-                    && c.max_sample_rate() >= SampleRate(16000)
+                c.channels() == 1
+                    && c.min_sample_rate() <= SampleRate(TARGET_RATE)
+                    && c.max_sample_rate() >= SampleRate(TARGET_RATE)
             })
-            .map(|c| c.with_sample_rate(SampleRate(16000)))
+            .map(|c| c.with_sample_rate(SampleRate(TARGET_RATE)))
             .or_else(|| device.default_input_config().ok())
             .ok_or("No suitable audio config found")?;
 
-        self.sample_rate = config.sample_rate().0;
+        self.capture_rate = config.sample_rate().0;
         let channels = config.channels() as usize;
+        eprintln!(
+            "[whispery] Audio config: {}Hz, {} channel(s), format={:?}",
+            self.capture_rate,
+            channels,
+            config.sample_format()
+        );
 
         let stream_config: StreamConfig = config.into();
         let samples = self.samples.clone();
-
-        {
-            let mut s = samples.lock().unwrap();
-            s.clear();
-        }
+        let level = self.current_level.clone();
 
         let stream = device
             .build_input_stream(
@@ -79,8 +97,15 @@ impl AudioRecorder {
                             buf.push(chunk[0]);
                         }
                     }
+
+                    if !data.is_empty() {
+                        let sum: f32 = data.iter().map(|s| s * s).sum();
+                        let rms = (sum / data.len() as f32).sqrt();
+                        let normalized = (rms * 8.0).min(1.0);
+                        *level.lock().unwrap() = normalized;
+                    }
                 },
-                |err| eprintln!("Audio stream error: {err}"),
+                |err| eprintln!("[whispery] Audio stream error: {err}"),
                 None,
             )
             .map_err(|e| format!("Failed to build stream: {e}"))?;
@@ -94,20 +119,54 @@ impl AudioRecorder {
 
     pub fn stop(&mut self) -> Vec<f32> {
         self.stream = None;
-        let samples = self.samples.lock().unwrap().clone();
-        samples
+        *self.current_level.lock().unwrap() = 0.0;
+        let mut buf = self.samples.lock().unwrap();
+        std::mem::take(&mut *buf)
+    }
+
+    pub fn cancel(&mut self) {
+        self.stream = None;
+        *self.current_level.lock().unwrap() = 0.0;
+        self.samples.lock().unwrap().clear();
+    }
+
+    fn resample(samples: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
+        if from_rate == to_rate {
+            return samples.to_vec();
+        }
+        let ratio = from_rate as f64 / to_rate as f64;
+        let out_len = (samples.len() as f64 / ratio) as usize;
+        let mut out = Vec::with_capacity(out_len);
+        for i in 0..out_len {
+            let src_idx = i as f64 * ratio;
+            let idx = src_idx as usize;
+            let frac = src_idx - idx as f64;
+            let s0 = samples[idx.min(samples.len() - 1)];
+            let s1 = samples[(idx + 1).min(samples.len() - 1)];
+            out.push(s0 + (s1 - s0) * frac as f32);
+        }
+        out
     }
 
     pub fn encode_wav(&self, samples: &[f32]) -> Vec<u8> {
+        let resampled = Self::resample(samples, self.capture_rate, TARGET_RATE);
+        eprintln!(
+            "[whispery] Resample: {}Hz -> {}Hz ({} -> {} samples)",
+            self.capture_rate,
+            TARGET_RATE,
+            samples.len(),
+            resampled.len()
+        );
+
         let mut cursor = std::io::Cursor::new(Vec::new());
         let spec = hound::WavSpec {
             channels: 1,
-            sample_rate: self.sample_rate,
+            sample_rate: TARGET_RATE,
             bits_per_sample: 16,
             sample_format: hound::SampleFormat::Int,
         };
         let mut writer = hound::WavWriter::new(&mut cursor, spec).unwrap();
-        for &s in samples {
+        for &s in &resampled {
             let val = (s * 32767.0).clamp(-32768.0, 32767.0) as i16;
             writer.write_sample(val).unwrap();
         }
