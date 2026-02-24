@@ -184,39 +184,40 @@
     width: 200px;
     height: 40px;
     border-radius: 9999px;
-    background: rgba(15, 15, 26, 0.92);
-    border: 1px solid rgba(100, 100, 140, 0.2);
-    backdrop-filter: blur(12px);
+    background: rgba(40, 40, 40, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     padding: 0 16px;
     transition: background 0.3s, border-color 0.3s, box-shadow 0.3s;
   }
 
   .pill.listening {
-    border-color: rgba(34, 211, 238, 0.3);
-    box-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
+    border-color: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   }
 
   .pill.processing {
-    border-color: rgba(251, 191, 36, 0.3);
-    box-shadow: 0 0 20px rgba(251, 191, 36, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   }
 
   .pill.success {
-    border-color: rgba(52, 211, 153, 0.4);
-    box-shadow: 0 0 20px rgba(52, 211, 153, 0.2);
+    border-color: rgba(52, 199, 89, 0.4);
+    box-shadow: 0 2px 16px rgba(52, 199, 89, 0.2);
     animation: flash-success 0.4s ease-out;
   }
 
   .pill.error {
-    border-color: rgba(248, 113, 113, 0.4);
-    box-shadow: 0 0 20px rgba(248, 113, 113, 0.2);
+    border-color: rgba(255, 59, 48, 0.4);
+    box-shadow: 0 2px 16px rgba(255, 59, 48, 0.2);
     animation: flash-error 0.5s ease-in-out;
   }
 
   .mic-icon {
     width: 16px;
     height: 16px;
-    color: #22d3ee;
+    color: rgba(255, 255, 255, 0.9);
     flex-shrink: 0;
   }
 
@@ -231,7 +232,7 @@
   .bar {
     width: 4px;
     min-height: 4px;
-    background: #22d3ee;
+    background: rgba(255, 255, 255, 0.85);
     border-radius: 2px;
     transition: height 0.08s ease-out;
   }
@@ -246,7 +247,7 @@
   .wave-bar {
     width: 3px;
     height: 6px;
-    background: #fbbf24;
+    background: rgba(255, 255, 255, 0.6);
     border-radius: 2px;
     animation: sine-wave 1s ease-in-out infinite;
   }
@@ -258,12 +259,12 @@
   }
 
   .success-icon {
-    color: #34d399;
+    color: #34c759;
     animation: pop 0.4s ease-out;
   }
 
   .error-icon {
-    color: #f87171;
+    color: #ff3b30;
     animation: shake 0.5s ease-in-out;
   }
 
@@ -271,17 +272,17 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 13px;
     font-weight: 500;
-    color: #e2e8f0;
+    color: rgba(255, 255, 255, 0.9);
   }
 
   @keyframes sine-wave {
     0%, 100% {
       height: 6px;
-      opacity: 0.6;
+      opacity: 0.4;
     }
     50% {
       height: 22px;
-      opacity: 1;
+      opacity: 0.9;
     }
   }
 
@@ -298,12 +299,12 @@
   }
 
   @keyframes flash-success {
-    0% { background: rgba(52, 211, 153, 0.2); }
-    100% { background: rgba(15, 15, 26, 0.92); }
+    0% { background: rgba(52, 199, 89, 0.15); }
+    100% { background: rgba(40, 40, 40, 0.55); }
   }
 
   @keyframes flash-error {
-    0% { background: rgba(248, 113, 113, 0.15); }
-    100% { background: rgba(15, 15, 26, 0.92); }
+    0% { background: rgba(255, 59, 48, 0.12); }
+    100% { background: rgba(40, 40, 40, 0.55); }
   }
 </style>

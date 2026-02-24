@@ -185,8 +185,8 @@
   ];
 
   const statusColors: Record<string, string> = {
-    idle: "bg-surface-lighter text-text-muted",
-    listening: "bg-accent/10 text-accent",
+    idle: "bg-surface-lighter/60 text-text-muted",
+    listening: "bg-success/10 text-success",
     processing: "bg-warning/10 text-warning",
     success: "bg-success/10 text-success",
     error: "bg-danger/10 text-danger",
@@ -198,7 +198,7 @@
     <header class="border-b border-surface-lighter bg-white sticky top-0 z-10">
       <div class="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+          <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
             <svg class="w-4.5 h-4.5 text-white" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
               <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
@@ -226,7 +226,7 @@
             <span class="text-xs font-semibold text-text-muted uppercase tracking-wider">Last Result</span>
             <button
               onclick={() => writeText(lastResult)}
-              class="text-xs text-primary hover:text-primary-light transition-colors font-medium"
+              class="text-xs text-text-muted hover:text-text transition-colors font-medium"
             >
               Copy Again
             </button>
@@ -265,7 +265,7 @@
 
       <div class="mt-6 text-center">
         <span class="text-xs text-text-muted">
-          Active: <span class="text-primary font-medium">
+          Active: <span class="text-text font-medium">
             {settings?.prompts.find((p) => p.id === settings?.activePromptId)?.name ?? "None"}
           </span>
         </span>
