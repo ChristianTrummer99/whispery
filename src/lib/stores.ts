@@ -140,7 +140,7 @@ let store: Store | null = null;
 
 export async function getStore(): Promise<Store> {
   if (!store) {
-    store = await load("settings.json", { autoSave: true });
+    store = await load("settings.json", { autoSave: true, defaults: {} });
   }
   return store;
 }

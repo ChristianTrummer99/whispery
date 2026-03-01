@@ -48,6 +48,44 @@ npm run tauri build
 5. Hold your PTT key to dictate — the overlay orb appears
 6. Release the key — text is transcribed, transformed, and copied to clipboard
 
+## Auto-Updates (macOS + Windows)
+
+Whispery is configured to publish update artifacts to GitHub Releases and check for updates in-app on startup.
+
+### One-time setup
+
+1. Generate updater signing keys locally:
+
+```bash
+npm run tauri signer generate -- -w ~/.tauri/whispery.key
+```
+
+2. Put the generated public key into `src-tauri/tauri.conf.json`:
+   - Replace `REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY` in `plugins.updater.pubkey`
+
+3. Add GitHub repository secrets:
+   - `TAURI_SIGNING_PRIVATE_KEY` (contents of `~/.tauri/whispery.key`)
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (password used during key generation)
+
+4. For macOS signed releases, also add:
+   - `APPLE_CERTIFICATE` (base64-encoded `.p12`)
+   - `APPLE_CERTIFICATE_PASSWORD`
+   - `APPLE_SIGNING_IDENTITY`
+   - `APPLE_ID`
+   - `APPLE_PASSWORD` (app-specific password)
+   - `APPLE_TEAM_ID`
+
+### Release flow
+
+After the one-time setup, publish updates with a tag:
+
+```bash
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+The GitHub Actions workflow at `.github/workflows/release.yml` builds macOS + Windows bundles and uploads updater artifacts (including `latest.json`) to the GitHub release.
+
 ## Project Structure
 
 ```

@@ -8,6 +8,7 @@
   let loading = $state(true);
   let recording = $state(false);
   let collectedKeys = $state<string[]>([]);
+  let hotkeyError = $state("");
   let recorderEl = $state<HTMLDivElement | null>(null);
 
   const CODE_TO_TAURI: Record<string, string> = {
@@ -29,6 +30,12 @@
   };
 
   const MODIFIER_ORDER = ["CommandOrControl", "Control", "ControlRight", "Super", "Alt", "AltRight", "Shift", "ShiftRight"];
+  const MODIFIER_SET = new Set(MODIFIER_ORDER);
+  const WINDOWS_LOCK_KEYS = new Set(["CapsLock", "NumLock", "ScrollLock"]);
+
+  function isWindowsPlatform(): boolean {
+    return typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
+  }
 
   function codeToTauriKey(code: string): string | null {
     if (/^F\d{1,2}$/.test(code)) return code;
@@ -47,6 +54,21 @@
       ...nonModifiers,
     ];
     return sorted.join("+");
+  }
+
+  function validateShortcut(keys: string[], mode: Settings["pttMode"]): string | null {
+    if (keys.length === 0) return "Please record a shortcut first.";
+
+    const hasNonModifier = keys.some((k) => !MODIFIER_SET.has(k));
+    if (!hasNonModifier) {
+      return "Shortcut must include at least one non-modifier key (e.g. F1, Space, A).";
+    }
+
+    if (isWindowsPlatform() && mode === "hold" && keys.some((k) => WINDOWS_LOCK_KEYS.has(k))) {
+      return "Caps/Num/Scroll Lock are unreliable in Hold mode on Windows. Use Toggle mode or a different key.";
+    }
+
+    return null;
   }
 
   const DISPLAY_NAMES: Record<string, string> = {
@@ -106,7 +128,13 @@
   function stopRecording() {
     recording = false;
     if (collectedKeys.length > 0) {
+      const validationError = validateShortcut(collectedKeys, settings.pttMode);
+      if (validationError) {
+        hotkeyError = validationError;
+        return;
+      }
       settings.pttKey = buildShortcutFromKeys(collectedKeys);
+      hotkeyError = "";
       onSave();
     }
   }
@@ -114,6 +142,19 @@
   function cancelRecording() {
     recording = false;
     collectedKeys = [];
+  }
+
+  function setPttMode(mode: Settings["pttMode"]) {
+    const keys = settings.pttKey.split("+").filter(Boolean);
+    const validationError = validateShortcut(keys, mode);
+    if (validationError) {
+      hotkeyError = validationError;
+      return;
+    }
+
+    hotkeyError = "";
+    settings.pttMode = mode;
+    onSave();
   }
 
   onMount(async () => {
@@ -263,12 +304,15 @@
         : "Press to start recording. Press again to stop and process."}
       Works globally even when the app is not focused.
     </p>
+    {#if hotkeyError}
+      <p class="mt-2 text-xs text-danger">{hotkeyError}</p>
+    {/if}
 
     <div class="mt-4">
       <label class="block mb-2 text-sm text-text">Hotkey Mode</label>
       <div class="grid grid-cols-2 gap-2">
         <button
-          onclick={() => { settings.pttMode = "hold"; onSave(); }}
+          onclick={() => setPttMode("hold")}
           class="flex flex-col items-center gap-1.5 px-4 py-3 rounded-xl border text-sm transition-all {settings.pttMode === 'hold'
             ? 'bg-primary/10 border-primary/30 text-text'
             : 'bg-surface-light border-transparent text-text-muted hover:border-surface-lighter'}"
@@ -280,7 +324,7 @@
           <span class="text-[11px] text-text-muted">Hold to record, release to process</span>
         </button>
         <button
-          onclick={() => { settings.pttMode = "toggle"; onSave(); }}
+          onclick={() => setPttMode("toggle")}
           class="flex flex-col items-center gap-1.5 px-4 py-3 rounded-xl border text-sm transition-all {settings.pttMode === 'toggle'
             ? 'bg-primary/10 border-primary/30 text-text'
             : 'bg-surface-light border-transparent text-text-muted hover:border-surface-lighter'}"

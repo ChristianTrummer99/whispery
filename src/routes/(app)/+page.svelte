@@ -2,7 +2,12 @@
   import { onMount, onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
-  import { register, unregister, unregisterAll } from "@tauri-apps/plugin-global-shortcut";
+  import {
+    register,
+    unregister,
+    unregisterAll,
+    isRegistered,
+  } from "@tauri-apps/plugin-global-shortcut";
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
   import {
     loadSettings,
@@ -25,6 +30,7 @@
   let isRecording = $state(false);
   let isProcessing = $state(false);
   let unlistenStatus: (() => void) | null = null;
+  let removeBeforeUnloadListener: (() => void) | null = null;
   let registeredKey: string | null = null;
   let escapeRegistered = false;
 
@@ -43,18 +49,24 @@
     );
     unlistenStatus = unlisten;
 
+    const handleBeforeUnload = () => {
+      void unregisterAll();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    removeBeforeUnloadListener = () => window.removeEventListener("beforeunload", handleBeforeUnload);
+
     await registerShortcut();
   });
 
   onDestroy(() => {
     unlistenStatus?.();
-    unregisterAll();
+    removeBeforeUnloadListener?.();
   });
 
   async function registerEscape() {
     if (escapeRegistered) return;
     try {
-      await register("Escape", async (event) => {
+      await register("Escape", async (event: { state: string }) => {
         if (event.state === "Pressed" && isRecording && !isProcessing) {
           await cancelCapture();
         }
@@ -138,16 +150,15 @@
     if (!settings) return;
 
     try {
-      if (registeredKey) {
-        await unregisterAll();
-        registeredKey = null;
-        escapeRegistered = false;
-      }
+      await unregisterEscape();
+      await unregisterAll();
+      registeredKey = null;
+      escapeRegistered = false;
 
       const key = settings.pttKey;
       const mode = settings.pttMode;
 
-      await register(key, async (event) => {
+      await register(key, async (event: { state: string }) => {
         if (mode === "hold") {
           if (event.state === "Pressed" && !isRecording && !isProcessing) {
             await startCapture();
@@ -166,6 +177,10 @@
         }
       });
       registeredKey = key;
+      const active = await isRegistered(key);
+      if (!active) {
+        console.error(`Shortcut was not registered by the OS: ${key}`);
+      }
     } catch (e) {
       console.error("Failed to register shortcut:", e);
     }
@@ -198,12 +213,7 @@
     <header class="border-b border-surface-lighter bg-white sticky top-0 z-10">
       <div class="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <svg class="w-4.5 h-4.5 text-white" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-            </svg>
-          </div>
+          <img src="/app-icon.png" alt="Whispery" class="w-8 h-8 rounded-lg" />
           <h1 class="text-lg font-bold tracking-tight">Whispery</h1>
         </div>
 
