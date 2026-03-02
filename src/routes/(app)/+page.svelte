@@ -34,6 +34,15 @@
   let registeredKey: string | null = null;
   let escapeRegistered = false;
 
+  function extractErrorMessage(error: unknown): string {
+    if (typeof error === "string") return error;
+    if (error && typeof error === "object" && "message" in error) {
+      const value = (error as { message?: unknown }).message;
+      if (typeof value === "string" && value.trim()) return value;
+    }
+    return "Something went wrong while processing audio.";
+  }
+
   onMount(async () => {
     settings = await loadSettings();
 
@@ -141,6 +150,10 @@
       }
     } catch (e) {
       console.error("Processing failed:", e);
+      const message = extractErrorMessage(e);
+      status = "error";
+      statusMessage = message;
+      window.alert(message);
     } finally {
       isProcessing = false;
     }

@@ -64,6 +64,16 @@ fn hide_overlay(app: &tauri::AppHandle) {
     }
 }
 
+fn emit_recording_status(app: &tauri::AppHandle, state: &str, message: Option<String>) {
+    let _ = app.emit(
+        "recording-status",
+        RecordingStatus {
+            state: state.into(),
+            message,
+        },
+    );
+}
+
 #[tauri::command]
 fn start_recording(
     state: tauri::State<AppState>,
@@ -209,11 +219,23 @@ async fn stop_recording_and_process(
         },
     );
 
+    if openai_api_key.trim().is_empty() {
+        let message = "OpenAI API key is missing".to_string();
+        emit_recording_status(&app, "error", Some(message.clone()));
+        return Err(message);
+    }
+
     let lang = whisper_language.as_deref().unwrap_or("en");
     let glossary = glossary_prompt.as_deref();
     eprintln!("[whispery] Transcription started (lang={lang}, glossary={})", glossary.unwrap_or("none"));
-    let transcribed =
-        transcribe::transcribe_whisper(&openai_api_key, wav_data, lang, glossary).await?;
+    let transcribed = match transcribe::transcribe_whisper(&openai_api_key, wav_data, lang, glossary).await {
+        Ok(value) => value,
+        Err(e) => {
+            let message = format!("Transcription failed: {e}");
+            emit_recording_status(&app, "error", Some(message.clone()));
+            return Err(message);
+        }
+    };
     eprintln!("[whispery] Transcription result: \"{}\"", transcribed);
 
     if transcribed.is_empty() {
@@ -240,14 +262,21 @@ async fn stop_recording_and_process(
             },
         );
         eprintln!("[whispery] Transformation started (model={llm_model})");
-        let result = transform::transform_text(
+        let result = match transform::transform_text(
             &llm_api_key,
             &llm_api_url,
             &llm_model,
             &prompt_template,
             &transcribed,
         )
-        .await?;
+        .await {
+            Ok(value) => value,
+            Err(e) => {
+                let message = format!("Transformation failed: {e}");
+                emit_recording_status(&app, "error", Some(message.clone()));
+                return Err(message);
+            }
+        };
         eprintln!("[whispery] Transformation result: \"{}\"", result);
         result
     };
@@ -342,9 +371,8 @@ pub fn run() {
         ])
         .on_window_event(|window, event| {
             if window.label() == "main" {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    let _ = window.hide();
-                    api.prevent_close();
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    window.app_handle().exit(0);
                 }
             }
         })
