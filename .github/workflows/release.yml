@@ -65,9 +65,17 @@ jobs:
     name: Publish public updater release
     needs: publish-tauri
     runs-on: ubuntu-latest
-    if: ${{ secrets.UPDATES_REPO_TOKEN != '' }}
+    env:
+      UPDATES_REPO_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
 
     steps:
+      - name: Validate updates repo token
+        run: |
+          if [ -z "$UPDATES_REPO_TOKEN" ]; then
+            echo "Missing UPDATES_REPO_TOKEN secret in private repository."
+            exit 1
+          fi
+
       - name: Download updater artifacts
         uses: actions/download-artifact@v4
         with:
@@ -108,7 +116,7 @@ jobs:
       - name: Publish updater release to public repo
         uses: softprops/action-gh-release@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
+          GITHUB_TOKEN: ${{ env.UPDATES_REPO_TOKEN }}
         with:
           repository: ${{ env.UPDATES_REPO }}
           tag_name: ${{ github.ref_name }}
