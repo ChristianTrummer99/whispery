@@ -50,6 +50,7 @@ jobs:
           releaseBody: "See the assets below to download this version."
 
       - name: Upload updater artifacts for public release
+        shell: bash
         run: |
           node <<'EOF'
           const fs = require('fs');
