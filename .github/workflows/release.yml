@@ -53,7 +53,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: updater-assets-${{ matrix.platform }}
-          path: ${{ steps.tauri.outputs.artifactPaths }}
+          path: ${{ join(fromJSON(steps.tauri.outputs.artifactPaths), '\n') }}
+          if-no-files-found: error
 
   publish-public-updates:
     name: Publish public updater release
