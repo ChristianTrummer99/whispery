@@ -1,6 +1,6 @@
 {
   "name": "whispery-app",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "",
   "type": "module",
   "scripts": {
@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "release:prep": "node scripts/release-prep.mjs",
     "tauri": "tauri"
   },
   "license": "MIT",
