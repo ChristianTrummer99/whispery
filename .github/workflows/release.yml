@@ -50,10 +50,31 @@ jobs:
           releaseBody: "See the assets below to download this version."
 
       - name: Upload updater artifacts for public release
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          const input = process.env.ARTIFACT_PATHS || '[]';
+          const artifacts = JSON.parse(input);
+          const outDir = path.resolve('updater-assets');
+          fs.mkdirSync(outDir, { recursive: true });
+
+          for (const artifactPath of artifacts) {
+            if (!fs.existsSync(artifactPath)) continue;
+            const dest = path.join(outDir, path.basename(artifactPath));
+            fs.cpSync(artifactPath, dest, { recursive: true, force: true });
+            console.log(`staged ${artifactPath} -> ${dest}`);
+          }
+          EOF
+        env:
+          ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
+
+      - name: Upload updater artifacts archive for public release
         uses: actions/upload-artifact@v4
         with:
           name: updater-assets-${{ matrix.platform }}
-          path: ${{ join(fromJSON(steps.tauri.outputs.artifactPaths), '\n') }}
+          path: updater-assets/**
           if-no-files-found: error
 
   publish-public-updates:
@@ -76,6 +97,15 @@ jobs:
         with:
           path: updater-assets
           merge-multiple: true
+
+      - name: Download latest.json from private release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pattern "latest.json" \
+            --dir updater-assets
 
       - name: Rewrite latest.json URLs for public updates repo
         env:
