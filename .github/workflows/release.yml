@@ -9,6 +9,9 @@ on:
 permissions:
   contents: write
 
+env:
+  UPDATES_REPO: ChristianTrummer99/whispery-updates
+
 jobs:
   publish-tauri:
     strategy:
@@ -35,6 +38,7 @@ jobs:
         run: npm ci
 
       - name: Build and publish Tauri release
+        id: tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -50,3 +54,64 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Whispery ${{ github.ref_name }}"
           releaseBody: "See the assets below to download this version."
+
+      - name: Upload updater artifacts for public release
+        uses: actions/upload-artifact@v4
+        with:
+          name: updater-assets-${{ matrix.platform }}
+          path: ${{ steps.tauri.outputs.artifactPaths }}
+
+  publish-public-updates:
+    name: Publish public updater release
+    needs: publish-tauri
+    runs-on: ubuntu-latest
+    if: ${{ secrets.UPDATES_REPO_TOKEN != '' }}
+
+    steps:
+      - name: Download updater artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: updater-assets
+          merge-multiple: true
+
+      - name: Rewrite latest.json URLs for public updates repo
+        env:
+          SOURCE_REPO: ${{ github.repository }}
+          TARGET_REPO: ${{ env.UPDATES_REPO }}
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          const source = `/${process.env.SOURCE_REPO}/`;
+          const target = `/${process.env.TARGET_REPO}/`;
+          const root = path.resolve('updater-assets');
+
+          function walk(dir, files = []) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) walk(full, files);
+              else files.push(full);
+            }
+            return files;
+          }
+
+          for (const file of walk(root)) {
+            if (path.basename(file) !== 'latest.json') continue;
+            const raw = fs.readFileSync(file, 'utf8');
+            const updated = raw.split(source).join(target);
+            fs.writeFileSync(file, updated, 'utf8');
+            console.log(`patched ${file}`);
+          }
+          EOF
+
+      - name: Publish updater release to public repo
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
+        with:
+          repository: ${{ env.UPDATES_REPO }}
+          tag_name: ${{ github.ref_name }}
+          name: "Whispery ${{ github.ref_name }}"
+          body: "Public updater artifacts for Whispery."
+          files: updater-assets/**

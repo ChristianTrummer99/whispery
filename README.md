@@ -50,7 +50,7 @@ npm run tauri build
 
 ## Auto-Updates (macOS + Windows)
 
-Whispery is configured to publish update artifacts to GitHub Releases and check for updates in-app on startup.
+Whispery is configured to build in this private repo and publish updater artifacts to a separate public repo (`ChristianTrummer99/whispery-updates`) that the app can access without authentication.
 
 ### One-time setup
 
@@ -63,11 +63,15 @@ npm run tauri signer generate -- -w ~/.tauri/whispery.key
 2. Put the generated public key into `src-tauri/tauri.conf.json`:
    - Replace `REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY` in `plugins.updater.pubkey`
 
-3. Add GitHub repository secrets:
+3. Create a public GitHub repo for updater artifacts:
+   - `ChristianTrummer99/whispery-updates`
+
+4. Add GitHub repository secrets in this (private) repo:
    - `TAURI_SIGNING_PRIVATE_KEY` (contents of `~/.tauri/whispery.key`)
    - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (password used during key generation)
+   - `UPDATES_REPO_TOKEN` (fine-grained PAT with **Contents: Read and write** on `ChristianTrummer99/whispery-updates`)
 
-4. For macOS signed releases, also add:
+5. For macOS signed releases, also add:
    - `APPLE_CERTIFICATE` (base64-encoded `.p12`)
    - `APPLE_CERTIFICATE_PASSWORD`
    - `APPLE_SIGNING_IDENTITY`
@@ -84,7 +88,7 @@ git tag v0.1.1
 git push origin v0.1.1
 ```
 
-The GitHub Actions workflow at `.github/workflows/release.yml` builds macOS + Windows bundles and uploads updater artifacts (including `latest.json`) to the GitHub release.
+The GitHub Actions workflow at `.github/workflows/release.yml` builds macOS + Windows bundles, then publishes updater artifacts (including `latest.json`) to the public updates repo release for the same tag.
 
 ## Project Structure
 
