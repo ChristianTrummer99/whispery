@@ -9,6 +9,7 @@
     isRegistered,
   } from "@tauri-apps/plugin-global-shortcut";
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+  import { confirm, message } from "@tauri-apps/plugin-dialog";
   import { check } from "@tauri-apps/plugin-updater";
   import {
     loadSettings,
@@ -152,10 +153,10 @@
       }
     } catch (e) {
       console.error("Processing failed:", e);
-      const message = extractErrorMessage(e);
+      const errorMessage = extractErrorMessage(e);
       status = "error";
-      statusMessage = message;
-      window.alert(message);
+      statusMessage = errorMessage;
+      await message(errorMessage, { title: "Processing Error", kind: "error" });
     } finally {
       isProcessing = false;
     }
@@ -213,20 +214,30 @@
     try {
       const update = await check();
       if (!update) {
-        window.alert("You are already on the latest version.");
+        await message("You are already on the latest version.", {
+          title: "No Updates Available",
+          kind: "info"
+        });
         return;
       }
 
-      const confirmed = window.confirm(
-        `Whispery ${update.version} is available. Install update now?`
+      const confirmed = await confirm(
+        `Whispery ${update.version} is available. Install update now?`,
+        { title: "Update Available", okLabel: "Install", cancelLabel: "Later" }
       );
       if (!confirmed) return;
 
       await update.downloadAndInstall();
-      window.alert("Update installed. Please restart Whispery.");
+      await message("Update installed. Please restart Whispery.", {
+        title: "Update Installed",
+        kind: "info"
+      });
     } catch (error) {
       console.error("Manual updater check failed:", error);
-      window.alert(extractErrorMessage(error));
+      await message(extractErrorMessage(error), {
+        title: "Update Error",
+        kind: "error"
+      });
     } finally {
       checkingForUpdates = false;
     }
