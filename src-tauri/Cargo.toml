@@ -1,6 +1,6 @@
 [package]
 name = "whispery-app"
-version = "0.1.14"
+version = "0.1.15"
 description = "Whispery - Push to Talk Dictation"
 authors = ["you"]
 edition = "2021"

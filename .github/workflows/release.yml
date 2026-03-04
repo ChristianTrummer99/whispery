@@ -37,14 +37,37 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Determine macOS signing availability
+        id: mac_signing
+        if: ${{ matrix.platform == 'macos-latest' }}
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$APPLE_CERTIFICATE" ] && \
+             [ -n "$APPLE_CERTIFICATE_PASSWORD" ] && \
+             [ -n "$APPLE_SIGNING_IDENTITY" ] && \
+             [ -n "$APPLE_ID" ] && \
+             [ -n "$APPLE_PASSWORD" ] && \
+             [ -n "$APPLE_TEAM_ID" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Warn when macOS notarization secrets are missing
-        if: ${{ matrix.platform == 'macos-latest' && (secrets.APPLE_CERTIFICATE == '' || secrets.APPLE_CERTIFICATE_PASSWORD == '' || secrets.APPLE_SIGNING_IDENTITY == '' || secrets.APPLE_ID == '' || secrets.APPLE_PASSWORD == '' || secrets.APPLE_TEAM_ID == '') }}
+        if: ${{ matrix.platform == 'macos-latest' && steps.mac_signing.outputs.enabled != 'true' }}
         run: |
           echo "::warning::Building unsigned macOS artifact because one or more APPLE_* secrets are missing. Gatekeeper may block the app on other Macs."
 
       - name: Build and publish Tauri release (default)
         id: tauri_default
-        if: ${{ matrix.platform != 'macos-latest' || secrets.APPLE_CERTIFICATE == '' || secrets.APPLE_CERTIFICATE_PASSWORD == '' || secrets.APPLE_SIGNING_IDENTITY == '' || secrets.APPLE_ID == '' || secrets.APPLE_PASSWORD == '' || secrets.APPLE_TEAM_ID == '' }}
+        if: ${{ matrix.platform != 'macos-latest' || steps.mac_signing.outputs.enabled != 'true' }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -57,7 +80,7 @@ jobs:
 
       - name: Build and publish Tauri release (macOS signed + notarized)
         id: tauri_macos_signed
-        if: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APPLE_SIGNING_IDENTITY != '' && secrets.APPLE_ID != '' && secrets.APPLE_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+        if: ${{ matrix.platform == 'macos-latest' && steps.mac_signing.outputs.enabled == 'true' }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
