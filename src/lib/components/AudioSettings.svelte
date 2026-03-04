@@ -361,6 +361,57 @@
     </p>
   </div>
 
+  <hr class="border-surface-lighter" />
+
+  <div class="space-y-4">
+    <h3 class="text-sm font-semibold text-text-muted uppercase tracking-wider">
+      Output After Transcription
+    </h3>
+
+    <label class="flex items-start gap-3 cursor-pointer">
+      <input
+        type="checkbox"
+        bind:checked={settings.autoCopyToClipboard}
+        onchange={onSave}
+        class="mt-0.5 w-4 h-4 rounded border-surface-lighter text-primary focus:ring-primary/30"
+      />
+      <div>
+        <span class="text-sm text-text">Auto-copy to clipboard</span>
+        <p class="text-xs text-text-muted">Copies the final text after every transcription.</p>
+      </div>
+    </label>
+
+    <label class="flex items-start gap-3 cursor-pointer">
+      <input
+        type="checkbox"
+        bind:checked={settings.autoInsertToInput}
+        onchange={onSave}
+        class="mt-0.5 w-4 h-4 rounded border-surface-lighter text-primary focus:ring-primary/30"
+      />
+      <div>
+        <span class="text-sm text-text">Auto-insert into focused input</span>
+        <p class="text-xs text-text-muted">Sends the final text into whichever field currently has focus.</p>
+      </div>
+    </label>
+
+    <div class:opacity-50={!settings.autoInsertToInput} class="space-y-1.5">
+      <label for="insert-mode" class="block text-sm text-text">Insert mode</label>
+      <select
+        id="insert-mode"
+        bind:value={settings.insertMode}
+        onchange={onSave}
+        disabled={!settings.autoInsertToInput}
+        class="w-full bg-surface-light border border-surface-lighter rounded-lg px-4 py-2.5 text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors disabled:cursor-not-allowed"
+      >
+        <option value="paste_shortcut">Paste shortcut (Cmd/Ctrl + V)</option>
+        <option value="type_characters">Type characters (compatibility mode)</option>
+      </select>
+      <p class="text-xs text-text-muted">
+        If some apps react badly to paste shortcuts (for example Softdent), use compatibility mode or turn off auto-insert.
+      </p>
+    </div>
+  </div>
+
   {#if import.meta.env.DEV}
     <hr class="border-surface-lighter" />
 

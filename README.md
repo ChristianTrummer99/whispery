@@ -1,18 +1,19 @@
 # Whispery
 
-A lightweight desktop app for **push-to-talk dictation** with AI-powered text transformation. Hold a key, speak, and get polished text copied to your clipboard.
+🎙️ A lightweight desktop app for **push-to-talk dictation** with AI-powered text transformation.  
+Hold a key, speak, release, and get polished text in your clipboard.
 
-## Features
+## ✨ What it does
 
-- **Global Push-to-Talk** — Hold a configurable key (Caps Lock, Right Alt, etc.) to record, release to process
-- **Animated Overlay** — A small always-on-top orb shows listening/processing/success state with smooth animations
-- **Speech-to-Text** — Powered by OpenAI Whisper API for high-accuracy transcription
-- **Transformation Prompts** — Apply AI prompts to your speech: fix grammar, summarize, make professional, turn into code, or create your own
-- **Multiple LLM Providers** — OpenAI, Anthropic, or any custom OpenAI-compatible endpoint
-- **System Tray** — Runs quietly in the background, accessible from the tray icon
-- **Clipboard Output** — Transformed text is automatically copied to your clipboard
+- **Global push-to-talk** - Hold a configurable key (Caps Lock, Right Alt, etc.) to record
+- **Animated overlay orb** - Shows listening/processing/success states
+- **Whisper transcription** - Accurate speech-to-text via OpenAI Whisper API
+- **Smart prompt transforms** - Fix grammar, summarize, make text professional, generate code, and more
+- **Multiple LLM providers** - OpenAI, Anthropic, or OpenAI-compatible endpoints
+- **Tray-first app** - Runs quietly in the background
+- **Flexible output** - Auto-copy, auto-insert, and insertion mode controls
 
-## Tech Stack
+## 🧱 Tech stack
 
 - **Tauri v2** (Rust backend + webview frontend)
 - **Svelte 5** + TypeScript
@@ -20,79 +21,92 @@ A lightweight desktop app for **push-to-talk dictation** with AI-powered text tr
 - **cpal** for cross-platform audio capture
 - **reqwest** for API communication
 
-## Prerequisites
+## 🚀 Clone and run locally
 
-- [Rust](https://rustup.rs/) (1.70+)
+### 1) Prerequisites
+
+- [Rust](https://rustup.rs/) (stable toolchain)
 - [Node.js](https://nodejs.org/) (18+)
-- An OpenAI API key (for Whisper transcription)
+- npm (comes with Node)
 
-## Setup
+### 2) Clone
 
 ```bash
-# Install dependencies
+git clone https://github.com/ChristianTrummer99/whispery.git
+cd whispery
+```
+
+### 3) Install dependencies
+
+```bash
 npm install
+```
 
-# Run in development mode
+### 4) Run in development mode
+
+```bash
 npm run tauri dev
+```
 
-# Build for production
+### 5) Build production bundles
+
+```bash
 npm run tauri build
 ```
 
-## Configuration
+## ⚙️ First-time app setup
 
-1. Launch the app — the settings window opens
-2. Go to **API Keys** tab and enter your OpenAI API key
-3. Go to **Audio** tab to select your microphone and PTT key
-4. Go to **Prompts** tab to choose or create transformation prompts
-5. Hold your PTT key to dictate — the overlay orb appears
-6. Release the key — text is transcribed, transformed, and copied to clipboard
+1. Launch the app (settings window opens)
+2. Open **API Keys** and add your OpenAI key for Whisper
+3. Open **Audio** and choose your microphone + push-to-talk key
+4. Open **Prompts** and pick/create transformation prompts
+5. Hold your push-to-talk key, speak, then release to process
+6. In **Audio > Output After Transcription**, choose auto-copy / auto-insert behavior
 
-## Auto-Updates (macOS + Windows)
+## 📦 Releases and updater bundles
 
-Whispery is configured to build in this private repo and publish updater artifacts to a separate public repo (`ChristianTrummer99/whispery-updates`) that the app can access without authentication.
+Normal users can download releases from this repo.  
+Updater artifacts are published to **`ChristianTrummer99/whispery-updates`** so the app can fetch updates without requiring auth.
 
-### One-time setup
+- Public updater repo: `https://github.com/ChristianTrummer99/whispery-updates`
+- It contains release bundles like `latest.json` and signed update assets used by in-app updates
+- Release workflow: `.github/workflows/release.yml`
 
-1. Generate updater signing keys locally:
+## 🔐 Maintainer notes (signing + release pipeline)
+
+If you maintain releases, set up updater signing once:
 
 ```bash
 npm run tauri signer generate -- -w ~/.tauri/whispery.key
 ```
 
-2. Put the generated public key into `src-tauri/tauri.conf.json`:
-   - Replace `REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY` in `plugins.updater.pubkey`
+Then configure:
 
-3. Create a public GitHub repo for updater artifacts:
-   - `ChristianTrummer99/whispery-updates`
+- `src-tauri/tauri.conf.json` -> `plugins.updater.pubkey` (public key)
+- GitHub Actions secrets:
+  - `TAURI_SIGNING_PRIVATE_KEY`
+  - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+  - `UPDATES_REPO_TOKEN` (write access to `ChristianTrummer99/whispery-updates`)
 
-4. Add GitHub repository secrets in this (private) repo:
-   - `TAURI_SIGNING_PRIVATE_KEY` (contents of `~/.tauri/whispery.key`)
-   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (password used during key generation)
-   - `UPDATES_REPO_TOKEN` (fine-grained PAT with **Contents: Read and write** on `ChristianTrummer99/whispery-updates`)
+For signed macOS releases, also set:
 
-5. For macOS signed releases, also add:
-   - `APPLE_CERTIFICATE` (base64-encoded `.p12`)
-   - `APPLE_CERTIFICATE_PASSWORD`
-   - `APPLE_SIGNING_IDENTITY`
-   - `APPLE_ID`
-   - `APPLE_PASSWORD` (app-specific password)
-   - `APPLE_TEAM_ID`
+- `APPLE_CERTIFICATE`
+- `APPLE_CERTIFICATE_PASSWORD`
+- `APPLE_SIGNING_IDENTITY`
+- `APPLE_ID`
+- `APPLE_PASSWORD` (app-specific password)
+- `APPLE_TEAM_ID`
 
-### Release flow
-
-After the one-time setup, publish updates with a tag:
+Publish a new version by tagging:
 
 ```bash
 git tag v0.1.1
 git push origin v0.1.1
 ```
 
-The GitHub Actions workflow at `.github/workflows/release.yml` builds macOS + Windows bundles, then publishes updater artifacts (including `latest.json`) to the public updates repo release for the same tag.
+## 🗂️ Project structure
 
-## Project Structure
-
-```
+```text
 whispery/
 ├── src/                          # Svelte frontend
 │   ├── lib/

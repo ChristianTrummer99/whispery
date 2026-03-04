@@ -119,21 +119,34 @@ fn hide_overlay_cmd(app: tauri::AppHandle) {
 }
 
 #[tauri::command]
-fn paste_to_input(text: String) -> Result<String, String> {
-    eprintln!("[whispery] Pasting to input: \"{}\"", text);
+fn copy_to_clipboard(text: String) -> Result<String, String> {
+    eprintln!("[whispery] Copying text to clipboard: \"{}\"", text);
     use arboard::Clipboard;
-    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-
-    let mut clipboard =
-        Clipboard::new().map_err(|e| format!("Clipboard::new failed: {e}"))?;
+    let mut clipboard = Clipboard::new().map_err(|e| format!("Clipboard::new failed: {e}"))?;
     clipboard
         .set_text(&text)
         .map_err(|e| format!("set_text failed: {e}"))?;
+    Ok("ok".into())
+}
 
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum InsertMode {
+    PasteShortcut,
+    TypeCharacters,
+}
+
+fn paste_with_shortcut(text: &str) -> Result<(), String> {
+    use arboard::Clipboard;
+    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+
+    let mut clipboard = Clipboard::new().map_err(|e| format!("Clipboard::new failed: {e}"))?;
+    clipboard
+        .set_text(text)
+        .map_err(|e| format!("set_text failed: {e}"))?;
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    let mut enigo =
-        Enigo::new(&Settings::default()).map_err(|e| format!("Enigo::new failed: {e}"))?;
+    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("Enigo::new failed: {e}"))?;
 
     #[cfg(target_os = "macos")]
     {
@@ -161,6 +174,32 @@ fn paste_to_input(text: String) -> Result<String, String> {
             .map_err(|e| format!("Ctrl release: {e}"))?;
     }
 
+    Ok(())
+}
+
+fn type_characters(text: &str) -> Result<(), String> {
+    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+
+    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| format!("Enigo::new failed: {e}"))?;
+    for ch in text.chars() {
+        enigo
+            .key(Key::Unicode(ch), Direction::Click)
+            .map_err(|e| format!("Type char failed: {e}"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn insert_into_input(text: String, mode: Option<InsertMode>) -> Result<String, String> {
+    let insert_mode = mode.unwrap_or(InsertMode::PasteShortcut);
+    eprintln!(
+        "[whispery] Inserting text into focused input with mode={:?}: \"{}\"",
+        insert_mode, text
+    );
+    match insert_mode {
+        InsertMode::PasteShortcut => paste_with_shortcut(&text)?,
+        InsertMode::TypeCharacters => type_characters(&text)?,
+    }
     Ok("ok".into())
 }
 
@@ -368,7 +407,8 @@ pub fn run() {
             cancel_recording,
             stop_recording_and_process,
             hide_overlay_cmd,
-            paste_to_input,
+            copy_to_clipboard,
+            insert_into_input,
         ])
         .on_window_event(|window, event| {
             if window.label() == "main" {

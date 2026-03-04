@@ -149,7 +149,15 @@
       });
 
       if (result) {
-        await invoke("paste_to_input", { text: result });
+        if (settings!.autoCopyToClipboard) {
+          await invoke("copy_to_clipboard", { text: result });
+        }
+        if (settings!.autoInsertToInput) {
+          await invoke("insert_into_input", {
+            text: result,
+            mode: settings!.insertMode,
+          });
+        }
       }
     } catch (e) {
       console.error("Processing failed:", e);

@@ -19,6 +19,9 @@ export interface Settings {
   activePromptId: string;
   prompts: Prompt[];
   glossary: string[];
+  autoCopyToClipboard: boolean;
+  autoInsertToInput: boolean;
+  insertMode: "paste_shortcut" | "type_characters";
   saveDebugAudio: boolean;
 }
 
@@ -133,6 +136,9 @@ export const DEFAULT_SETTINGS: Settings = {
   activePromptId: "fix-grammar",
   prompts: [...DEFAULT_PROMPTS],
   glossary: [],
+  autoCopyToClipboard: true,
+  autoInsertToInput: true,
+  insertMode: "paste_shortcut",
   saveDebugAudio: false,
 };
 
