@@ -104,14 +104,35 @@ jobs:
           const fs = require('fs');
           const path = require('path');
 
+          const allowedExt = new Set(['.json', '.dmg', '.gz', '.sig', '.exe', '.msi']);
+          const allowExact = new Set(['latest.json']);
           const input = process.env.ARTIFACT_PATHS || '[]';
           const artifacts = JSON.parse(input);
           const outDir = path.resolve('updater-assets');
           fs.mkdirSync(outDir, { recursive: true });
+          const seenNames = new Set();
+
+          function shouldInclude(filePath) {
+            const base = path.basename(filePath);
+            if (allowExact.has(base)) return true;
+            if (base.endsWith('.app.tar.gz')) return true;
+            if (base.endsWith('.app.tar.gz.sig')) return true;
+            return allowedExt.has(path.extname(base));
+          }
 
           for (const artifactPath of artifacts) {
             if (!fs.existsSync(artifactPath)) continue;
-            const dest = path.join(outDir, path.basename(artifactPath));
+            const base = path.basename(artifactPath);
+            if (!shouldInclude(artifactPath)) {
+              console.log(`skipping non-updater artifact ${artifactPath}`);
+              continue;
+            }
+            if (seenNames.has(base)) {
+              console.log(`skipping duplicate updater artifact ${artifactPath}`);
+              continue;
+            }
+            seenNames.add(base);
+            const dest = path.join(outDir, base);
             fs.cpSync(artifactPath, dest, { recursive: true, force: true });
             console.log(`staged ${artifactPath} -> ${dest}`);
           }
