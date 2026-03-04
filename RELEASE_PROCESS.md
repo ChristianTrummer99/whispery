@@ -19,7 +19,7 @@ This document is the single source of truth for shipping Whispery updates to use
    - `UPDATES_REPO_TOKEN` (must have write access to `ChristianTrummer99/whispery-updates`)
 3. Ensure the public updates repo exists and is initialized (at least one commit).
 
-Optional for signed macOS distribution:
+Required for macOS builds that should open normally on other machines (Gatekeeper):
 
 - `APPLE_CERTIFICATE`
 - `APPLE_CERTIFICATE_PASSWORD`
@@ -27,6 +27,8 @@ Optional for signed macOS distribution:
 - `APPLE_ID`
 - `APPLE_PASSWORD`
 - `APPLE_TEAM_ID`
+
+If these are missing, CI will still build a macOS artifact, but it will be unsigned/ad-hoc and may show "is damaged and can't be opened" on another Mac.
 
 ## Standard Release Steps
 
